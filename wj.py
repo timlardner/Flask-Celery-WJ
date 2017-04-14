@@ -33,14 +33,16 @@ celery = Celery(os.path.splitext(__file__)[0],
 
 @celery.task
 def get_data_from_strava():
-    current_task.update_state(state='PROGRESS')
+    current_task.update_state(state='PROGRESS',meta={'current':0.1})
     time.sleep(2)
+    current_task.update_state(state='PROGRESS',meta={'current':0.3})
     fig=Figure()
     ax=fig.add_subplot(111)
     x=[]
     y=[]
     now=datetime.datetime.now()
     delta=datetime.timedelta(days=1)
+    current_task.update_state(state='PROGRESS',meta={'current':0.5})
     for i in range(10):
         x.append(now)
         now+=delta
@@ -49,11 +51,13 @@ def get_data_from_strava():
     ax.xaxis.set_major_formatter(DateFormatter('%Y-%m-%d'))
     fig.autofmt_xdate()
     canvas=FigureCanvas(fig)
+    current_task.update_state(state='PROGRESS',meta={'current':0.8})
     png_output = BytesIO()
     canvas.print_png(png_output)
     out = png_output.getvalue()
     filename = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20)) + '.png'
     pickle.dump(out,open(filename,'wb'))
+    current_task.update_state(state='PROGRESS',meta={'current':1.0})
     return filename
 
 
@@ -74,12 +78,12 @@ def progress():
         if job.state == 'PROGRESS':
             return json.dumps(dict(
                 state=job.state,
-                progress=0,
+                progress=job.result['current'],
             ))
         elif job.state == 'SUCCESS':
             return json.dumps(dict(
                 state=job.state,
-                progress=1,
+                progress=1.0,
             ))
     return '{}'
 
@@ -101,17 +105,33 @@ def result():
 def image_page():
     job = get_data_from_strava.delay()
     return render_template_string('''\
-
+<style>
+#prog {
+width: 400px;
+border: 1px solid red;
+height: 20px;
+}
+#bar {
+width: 0px;
+background-color: blue;
+height: 20px;
+}
+</style>
 <h3>Awesome Asynchronous Image Generation</h3>
 <div id="imgpl">Image not ready. Please wait.</div>
+<div id="wrapper"><div id="prog"><div id="bar"></div></div></div>
 <script src="//code.jquery.com/jquery-2.1.1.min.js"></script>
 <script>
 function poll() {
     $.ajax("{{url_for('.progress', jobid=JOBID)}}", {
         dataType: "json"
         , success: function(resp) {
-            if(resp.progress == 1) {
-                $("#imgpl").html('<img src="result.png?jobid={{JOBID}}">')
+            $("#bar").css({width: $("#prog").width() * resp.progress});
+            if(resp.progress >= 0.99) {
+                $("#wrapper").html('');
+                $("#imgpl").html('<img src="result.png?jobid={{JOBID}}">');
+
+                
                 return;
             } else {
                 setTimeout(poll, 500.0);
