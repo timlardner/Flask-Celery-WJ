@@ -1,20 +1,26 @@
 # Usage
 
-# sudo apt-get install rabbitmq-server
+""" create bash script with following and run prior to use:
+#!/bin/bash
+if [ ! -d redis-stable/src ]; then
+    curl -O http://download.redis.io/redis-stable.tar.gz
+    tar xvzf redis-stable.tar.gz
+    rm redis-stable.tar.gz
+fi
+cd redis-stable
+make
+src/redis-server
+"""
 # pip install celery
 # celery -A wj.celery worker
 # python wj.py
 # Visit http://localhost:5000 for a demo
 
-import os
-import uuid
 import random
-import string
 from io import BytesIO
 import time
 import json
 import datetime
-import pickle
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -25,43 +31,45 @@ from flask import Blueprint, make_response, abort
 from celery import Celery, current_task
 from celery.result import AsyncResult
 
+app = Flask(__name__)
 
-celery = Celery(os.path.splitext(__file__)[0],
-        backend='rpc://',
-        broker='amqp://localhost')
+app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+celery.conf.update(app.config)
 
 
 @celery.task
 def get_data_from_strava():
-    current_task.update_state(state='PROGRESS',meta={'current':0.1})
+    current_task.update_state(state='PROGRESS', meta={'current': 0.1})
     time.sleep(2)
-    current_task.update_state(state='PROGRESS',meta={'current':0.3})
-    fig=Figure()
-    ax=fig.add_subplot(111)
-    x=[]
-    y=[]
-    now=datetime.datetime.now()
-    delta=datetime.timedelta(days=1)
-    current_task.update_state(state='PROGRESS',meta={'current':0.5})
+    current_task.update_state(state='PROGRESS', meta={'current': 0.3})
+    fig = Figure()
+    ax = fig.add_subplot(111)
+    x = []
+    y = []
+    now = datetime.datetime.now()
+    delta = datetime.timedelta(days=1)
+    current_task.update_state(state='PROGRESS', meta={'current': 0.5})
     for i in range(10):
         x.append(now)
-        now+=delta
+        now += delta
         y.append(random.randint(0, 1000))
     ax.plot_date(x, y, '-')
     ax.xaxis.set_major_formatter(DateFormatter('%Y-%m-%d'))
     fig.autofmt_xdate()
-    canvas=FigureCanvas(fig)
-    current_task.update_state(state='PROGRESS',meta={'current':0.8})
+    canvas = FigureCanvas(fig)
+    current_task.update_state(state='PROGRESS', meta={'current': 0.8})
     png_output = BytesIO()
     canvas.print_png(png_output)
     out = png_output.getvalue()
-    filename = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20)) + '.png'
-    pickle.dump(out,open(filename,'wb'))
-    current_task.update_state(state='PROGRESS',meta={'current':1.0})
-    return filename
+    current_task.update_state(state='PROGRESS', meta={'current': 1.0})
+    return out
 
 
 app = Flask(__name__)
+
 
 @app.route('/progress')
 def progress():
@@ -70,7 +78,6 @@ def progress():
         job = AsyncResult(jobid, app=celery)
         print(job.state)
         print(job.result)
-
 
         # If you have different stages here, you could actually update this
         # and have a progress bar while the image is being generated.
@@ -87,19 +94,19 @@ def progress():
             ))
     return '{}'
 
+
 @app.route('/result.png')
 def result():
     jobid = request.values.get('jobid')
     if jobid:
         job = AsyncResult(jobid, app=celery)
-        filename = job.get()
-        png_output = pickle.load(open(filename,'rb'))
-        os.remove(filename)
-        response=make_response(png_output)
+        png_output = job.get()
+        response = make_response(png_output)
         response.headers['Content-Type'] = 'image/png'
         return response
     else:
-        return 404    
+        return 404
+
 
 @app.route('/image_page')
 def image_page():
