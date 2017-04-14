@@ -1,7 +1,11 @@
 # Usage
 
+# curl http://download.redis.io/redis-stable.tar.gz | tar xz && cd redis-stable && make && sudo make install
+# Configure using: https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-redis-on-ubuntu-16-04
+
 # sudo apt-get install rabbitmq-server
 # pip install celery
+
 # celery -A wj.celery worker
 # python wj.py
 # Visit http://localhost:5000 for a demo
@@ -10,11 +14,10 @@ import os
 import uuid
 import random
 import string
-from io import BytesIO
 import time
 import json
 import datetime
-import pickle
+from io import BytesIO
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -26,23 +29,26 @@ from celery import Celery, current_task
 from celery.result import AsyncResult
 
 
-celery = Celery(os.path.splitext(__file__)[0],
-        backend='rpc://',
+app = Flask(__name__)
+celery = Celery(app.name,
+        backend='redis://localhost:6379/0',
         broker='amqp://localhost')
 
+celery.conf.accept_content = ['json', 'msgpack']
+celery.conf.result_serializer = 'msgpack'
 
-@celery.task
+@celery.task()
 def get_data_from_strava():
-    current_task.update_state(state='PROGRESS',meta={'current':0.1})
+    current_task.update_state(state='PROGRESS', meta={'current':0.1})
     time.sleep(2)
-    current_task.update_state(state='PROGRESS',meta={'current':0.3})
+    current_task.update_state(state='PROGRESS', meta={'current':0.3})
     fig=Figure()
     ax=fig.add_subplot(111)
     x=[]
     y=[]
     now=datetime.datetime.now()
     delta=datetime.timedelta(days=1)
-    current_task.update_state(state='PROGRESS',meta={'current':0.5})
+    current_task.update_state(state='PROGRESS', meta={'current':0.5})
     for i in range(10):
         x.append(now)
         now+=delta
@@ -51,39 +57,26 @@ def get_data_from_strava():
     ax.xaxis.set_major_formatter(DateFormatter('%Y-%m-%d'))
     fig.autofmt_xdate()
     canvas=FigureCanvas(fig)
-    current_task.update_state(state='PROGRESS',meta={'current':0.8})
+    current_task.update_state(state='PROGRESS', meta={'current':0.8})
     png_output = BytesIO()
     canvas.print_png(png_output)
     out = png_output.getvalue()
-    filename = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20)) + '.png'
-    pickle.dump(out,open(filename,'wb'))
-    current_task.update_state(state='PROGRESS',meta={'current':1.0})
-    return filename
-
-
-app = Flask(__name__)
+    return out
 
 @app.route('/progress')
 def progress():
     jobid = request.values.get('jobid')
     if jobid:
         job = AsyncResult(jobid, app=celery)
-        print(job.state)
-        print(job.result)
-
-
-        # If you have different stages here, you could actually update this
-        # and have a progress bar while the image is being generated.
-
         if job.state == 'PROGRESS':
             return json.dumps(dict(
-                state=job.state,
-                progress=job.result['current'],
+                state = job.state,
+                progress = job.result['current'],
             ))
         elif job.state == 'SUCCESS':
             return json.dumps(dict(
-                state=job.state,
-                progress=1.0,
+                state = job.state,
+                progress = 1.0,
             ))
     return '{}'
 
@@ -92,14 +85,12 @@ def result():
     jobid = request.values.get('jobid')
     if jobid:
         job = AsyncResult(jobid, app=celery)
-        filename = job.get()
-        png_output = pickle.load(open(filename,'rb'))
-        os.remove(filename)
-        response=make_response(png_output)
+        png_output = job.get()
+        response = make_response(png_output)
         response.headers['Content-Type'] = 'image/png'
         return response
     else:
-        return 404    
+        return 404
 
 @app.route('/image_page')
 def image_page():
@@ -154,10 +145,9 @@ $(function() {
 @app.route('/')
 def index():
     return render_template_string('''\
-
 <a href="{{ url_for('.image_page') }}">Whatever you click to get data from Strava...</a>
 ''')
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
