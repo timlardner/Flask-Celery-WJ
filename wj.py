@@ -1,16 +1,6 @@
 # Usage
 
-""" create bash script with following and run prior to use:
-#!/bin/bash
-if [ ! -d redis-stable/src ]; then
-    curl -O http://download.redis.io/redis-stable.tar.gz
-    tar xvzf redis-stable.tar.gz
-    rm redis-stable.tar.gz
-fi
-cd redis-stable
-make
-src/redis-server
-"""
+# ./redis.sh
 # pip install celery
 # celery -A wj.celery worker
 # python wj.py
@@ -77,7 +67,7 @@ def progress():
     if jobid:
         job = AsyncResult(jobid, app=celery)
         print(job.state)
-        print(job.result)
+        #print(job.result)
 
         # If you have different stages here, you could actually update this
         # and have a progress bar while the image is being generated.
