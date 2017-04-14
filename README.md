@@ -2,7 +2,8 @@
 
 ### Usage
 
-    sudo apt-get install rabbitmq-server
+    sudo chmod +x redis.sh
+    ./redis.sh
     pip install celery
     celery -A wj.celery worker
     python wj.py
