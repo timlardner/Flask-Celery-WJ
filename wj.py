@@ -1,14 +1,4 @@
-# Usage
-
-# curl http://download.redis.io/redis-stable.tar.gz | tar xz && cd redis-stable && make && sudo make install
-# Configure using: https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-redis-on-ubuntu-16-04
-
-# sudo apt-get install rabbitmq-server
-# pip install celery
-
-# celery -A wj.celery worker
-# python wj.py
-# Visit http://localhost:5000 for a demo
+# See README.me for install and usage instructions
 
 import os
 import uuid
